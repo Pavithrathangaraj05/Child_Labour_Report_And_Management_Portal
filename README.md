@@ -83,22 +83,4 @@ Demo tracking: Tracking ID `CS-DEMO123`, PIN `123456` (case CL-2026-001245, Stre
 | GET/POST/PATCH | /api/users | ADMIN |
 | GET | /api/health | public |
 
-## 10. Module 1 completion checklist
-Backend `tsc` clean and 4 unit tests pass; frontend `tsc` clean and production build succeeds; API validation/auth smoke test
-(no DB) passes. The 12 acceptance tests below must be run by you against a live MongoDB:
-1. Home page loads  2. Report a Case opens wizard  3. Submit anonymous report  4. Receive Case ID + Tracking ID + PIN (+QR)
-5. Track Complaint page  6. Enter ID + PIN  7. See "Submitted"  8. Login as police  9. Login as labour
-10. Compare: police sees emergency cases, labour sees labour categories, NGO sees none, GOVERNMENT sees summaries only, citizen is refused /staff
-11. Upload evidence (wizard step 5, or staff "Upload evidence" in case detail)  12. Reload and confirm data persists.
 
-## 11. Known limitations
-- Not verified end to end here: the build environment had no MongoDB, so database-backed flows were not executed. Run the checklist.
-- No AI scoring, no emergency dispatch, no face detection/redaction (uploaded images are stored as-is; EXIF/GPS metadata is NOT stripped).
-- No case assignment or status-change workflow yet: new cases stay SUBMITTED; only seed data is assigned, so newly submitted
-  non-emergency cases are visible to Labour/CWC by category rules only, and never to NGO.
-- Evidence files are stored but there is no download/preview endpoint yet.
-- Optional map picker not included (GPS button + landmark text only).
-- Uploads are buffered in memory (max 5 x 25 MB per request); use streaming storage in production.
-- Rate limiting is in-process memory (single instance). Use a shared store (Redis, Module 3) when scaled.
-- No email/SMS verification, password reset or MFA. Helpline numbers (112, 1098) should be verified before launch.
-- No automated API integration tests yet.
