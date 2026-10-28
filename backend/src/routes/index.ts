@@ -7,7 +7,7 @@ import { authenticate, authorize, optionalAuth } from '../middleware/auth';
 import { authLimiter, reportLimiter, trackLimiter, uploadLimiter } from '../middleware/rateLimit';
 import { authorizeEvidenceUpload, uploadFiles, uploadPairedFiles } from '../middleware/upload';
 import { validate } from '../middleware/validate';
-import { createUserSchema, loginSchema, registerSchema, sendOtpSchema, updateUserSchema } from '../validators/auth.validators';
+import { createUserSchema, loginSchema, registerSchema, sendOtpSchema, updateUserSchema, verifyOtpSchema } from '../validators/auth.validators';
 import {
   assignCaseSchema,
   caseIdParam,
@@ -26,6 +26,7 @@ r.get('/health', (_req, res) => res.json({ status: 'ok', module: 4 }));
 
 // ── auth & OTP verification
 r.post('/auth/send-otp', authLimiter, validate(sendOtpSchema), authC.sendOtp);
+r.post('/auth/verify-otp', authLimiter, validate(verifyOtpSchema), authC.verifyOtp);
 r.post('/auth/register', authLimiter, validate(registerSchema), authC.register);
 r.post('/auth/login', authLimiter, validate(loginSchema), authC.login);
 r.post('/auth/refresh', authLimiter, authC.refresh);

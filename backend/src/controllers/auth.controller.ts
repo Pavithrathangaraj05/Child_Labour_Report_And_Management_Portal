@@ -19,6 +19,11 @@ export const sendOtp = asyncHandler(async (req, res) => {
   res.json(result);
 });
 
+export const verifyOtp = asyncHandler(async (req, res) => {
+  const result = await auth.verifyOtp(req.body.email, req.body.otp);
+  res.json(result);
+});
+
 export const register = asyncHandler(async (req, res) => {
   const session = await auth.registerCitizen(req.body, ctx(req));
   send(res, session);

@@ -11,12 +11,29 @@ import AppButton from '../components/AppButton';
 import { useAuth } from '../auth/AuthContext';
 import { colors } from '../theme';
 
+function validatePassword(pw: string): string | null {
+  if (pw.length < 10) {
+    return 'Password must be at least 10 characters long.';
+  }
+  if (!/[a-z]/.test(pw)) {
+    return 'Password must include at least one lowercase letter (a-z).';
+  }
+  if (!/[A-Z]/.test(pw)) {
+    return 'Password must include at least one uppercase letter (A-Z).';
+  }
+  if (!/\d/.test(pw)) {
+    return 'Password must include at least one number (0-9).';
+  }
+  return null;
+}
+
 export default function RegisterPage() {
   const nav = useNavigate();
   const { login: setAuthSession } = useAuth() as any;
 
   // Step 1: Form details, Step 2: OTP verification
   const [step, setStep] = useState<'DETAILS' | 'OTP'>('DETAILS');
+  const [showPasswordEdit, setShowPasswordEdit] = useState<boolean>(false);
   const [f, setF] = useState({
     name: '',
     email: '',
@@ -42,9 +59,7 @@ export default function RegisterPage() {
       return resp.data;
     },
     onSuccess: (data) => {
-      if (data.demoOtp) {
-        setDemoOtpHint(data.demoOtp);
-      }
+      setDemoOtpHint(data.demoOtp || '');
       setStep('OTP');
     },
   });
@@ -79,8 +94,9 @@ export default function RegisterPage() {
       setLocalError('Passwords do not match. Please re-enter identical passwords.');
       return;
     }
-    if (f.password.length < 10) {
-      setLocalError('Password must be at least 10 characters with upper case, lower case, and a digit.');
+    const pwErr = validatePassword(f.password);
+    if (pwErr) {
+      setLocalError(pwErr);
       return;
     }
 
@@ -92,6 +108,17 @@ export default function RegisterPage() {
     setLocalError('');
     if (!f.otp || f.otp.trim().length !== 6) {
       setLocalError('Please enter the 6-digit OTP code sent to your email.');
+      return;
+    }
+    if (f.password !== f.confirmPassword) {
+      setLocalError('Passwords do not match. Please ensure both passwords match.');
+      setShowPasswordEdit(true);
+      return;
+    }
+    const pwErr = validatePassword(f.password);
+    if (pwErr) {
+      setLocalError(pwErr);
+      setShowPasswordEdit(true);
       return;
     }
     registerMutation.mutate();
@@ -138,7 +165,7 @@ export default function RegisterPage() {
                 value={f.password}
                 onChange={set('password')}
                 required
-                helperText="At least 10 characters with upper case, lower case and a digit."
+                helperText="At least 10 characters with uppercase (A-Z), lowercase (a-z) and a digit (0-9)."
               />
               <TextField
                 label="Confirm Password"
@@ -161,6 +188,12 @@ export default function RegisterPage() {
                 Send Verification OTP
               </AppButton>
 
+              {f.email && (
+                <Button size="small" variant="text" color="secondary" onClick={() => setStep('OTP')}>
+                  Already received code? Enter OTP
+                </Button>
+              )}
+
               <Typography variant="body2">
                 Already registered? <Link component={RouterLink} to="/login">Sign in</Link>
               </Typography>
@@ -173,17 +206,64 @@ export default function RegisterPage() {
               </Stack>
 
               <Typography variant="body2" color="text.secondary">
-                We sent a 6-digit verification code to <b>{f.email}</b>. Please enter the code below to activate your account.
+                We sent a 6-digit verification code to <b>{f.email}</b>. Please enter the code below to confirm your email and activate your account.
               </Typography>
 
-              {demoOtpHint && (
-                <Alert severity="info" sx={{ fontSize: 13 }}>
-                  Demo OTP code: <b>{demoOtpHint}</b> (In production, sent via email).
+              {!demoOtpHint && (
+                <Alert severity="success" sx={{ fontSize: 13 }}>
+                  Verification code dispatched to <b>{f.email}</b>. Please check your inbox (and spam/junk folder).
                 </Alert>
               )}
 
+              {/* {demoOtpHint && (
+                // <Alert severity="info" sx={{ fontSize: 13 }}>
+                //   Demo OTP code: <b>{demoOtpHint}</b> (In production with SMTP configured, sent directly via email).
+                // </Alert>
+              )} */}
+
               {localError && <Alert severity="error">{localError}</Alert>}
-              {registerMutation.isError && <Alert severity="error">{errorMessage(registerMutation.error)}</Alert>}
+              {sendOtpMutation.isError && <Alert severity="error">{errorMessage(sendOtpMutation.error)}</Alert>}
+              {registerMutation.isError && (
+                <Alert severity="error">
+                  {errorMessage(registerMutation.error)}
+                  <Box sx={{ mt: 1 }}>
+                    <Button size="small" variant="outlined" color="inherit" onClick={() => setShowPasswordEdit(true)}>
+                      Update Password Below
+                    </Button>
+                  </Box>
+                </Alert>
+              )}
+
+              {showPasswordEdit && (
+                <Box sx={{ p: 2, bgcolor: '#f8fafc', borderRadius: 1.5, border: '1px solid #cbd5e1' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 'bold', mb: 1, color: '#0f172a' }}>
+                    Set Password Meeting Security Policy:
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1.5 }}>
+                    Must have 10+ characters, 1 uppercase (A-Z), 1 lowercase (a-z), and 1 number (0-9).
+                  </Typography>
+                  <Stack spacing={1.5}>
+                    <TextField
+                      label="Password"
+                      type="password"
+                      size="small"
+                      value={f.password}
+                      onChange={set('password')}
+                      required
+                    />
+                    <TextField
+                      label="Confirm Password"
+                      type="password"
+                      size="small"
+                      value={f.confirmPassword}
+                      onChange={set('confirmPassword')}
+                      error={!!f.confirmPassword && f.password !== f.confirmPassword}
+                      helperText={f.confirmPassword && f.password !== f.confirmPassword ? 'Passwords do not match' : ''}
+                      required
+                    />
+                  </Stack>
+                </Box>
+              )}
 
               <TextField
                 label="6-Digit OTP Code"
@@ -208,16 +288,26 @@ export default function RegisterPage() {
                 <Button
                   size="small"
                   disabled={sendOtpMutation.isPending}
-                  onClick={() => sendOtpMutation.mutate()}
+                  onClick={() => {
+                    setLocalError('');
+                    sendOtpMutation.mutate();
+                  }}
                 >
-                  Resend OTP
+                  {sendOtpMutation.isPending ? 'Sending...' : 'Resend OTP'}
+                </Button>
+                <Button
+                  size="small"
+                  color={showPasswordEdit ? 'inherit' : 'primary'}
+                  onClick={() => setShowPasswordEdit((v) => !v)}
+                >
+                  {showPasswordEdit ? 'Hide Password' : 'Edit Password'}
                 </Button>
                 <Button
                   size="small"
                   color="inherit"
                   onClick={() => setStep('DETAILS')}
                 >
-                  Change Email
+                  Edit Details
                 </Button>
               </Stack>
             </Stack>

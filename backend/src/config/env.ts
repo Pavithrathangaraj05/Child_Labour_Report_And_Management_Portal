@@ -19,6 +19,13 @@ const schema = z.object({
   MAX_UPLOAD_MB: z.coerce.number().default(25),
   SEED_PASSWORD: z.string().optional(),
   POSTGRES_URL: z.string().optional(),
+  SMTP_SERVICE: z.string().optional(),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().optional(),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  SMTP_SECURE: z.string().optional(),
+  MAIL_FROM: z.string().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

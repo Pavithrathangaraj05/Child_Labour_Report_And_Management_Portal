@@ -7,7 +7,7 @@ import { AppError } from '../utils/AppError';
 import { randomToken, sha256 } from '../utils/crypto';
 import { signAccessToken } from '../utils/jwt';
 import { sendEmail } from './notification.service';
-import { sendOtpEmail } from './mail.service';
+import { isMailConfigured, sendOtpEmail } from './mail.service';
 import { logSecurityEvent } from './securityAudit.service';
 
 // Used to keep response time similar whether or not the account exists (limits user enumeration).
@@ -55,12 +55,53 @@ export async function sendOtp(email: string) {
   // Dispatch Email Notification via Nodemailer transporter
   const mailRes = await sendOtpEmail(normalizedEmail, code);
 
+  // If real mail is configured and delivery failed, report error
+  if (isMailConfigured() && !mailRes.success) {
+    throw new AppError(500, `Failed to deliver OTP to ${normalizedEmail}: ${mailRes.error || 'Mail dispatch error'}. Please verify email settings.`);
+  }
+
+  const mailConfigured = isMailConfigured();
+
   return {
     success: true,
-    message: `OTP sent to ${normalizedEmail}`,
-    demoOtp: code,
+    message: mailConfigured
+      ? `Verification OTP sent to ${normalizedEmail}. Please check your email inbox.`
+      : `OTP generated for ${normalizedEmail}`,
+    // Return demoOtp only in dev mode when SMTP is not configured
+    demoOtp: mailConfigured ? undefined : code,
     previewUrl: mailRes.previewUrl,
   };
+}
+
+/**
+ * Verifies email OTP and confirms the email address belongs to the user.
+ */
+export async function verifyOtp(email: string, otp: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+  const record = pendingOtps.get(normalizedEmail);
+
+  if (!otp || !otp.trim()) {
+    throw new AppError(400, 'OTP code is required.');
+  }
+
+  if (!record || record.code !== otp.trim()) {
+    throw new AppError(400, 'Invalid or expired OTP code. Please enter the correct OTP or request a new one.');
+  }
+
+  if (Date.now() > record.expiresAt) {
+    pendingOtps.delete(normalizedEmail);
+    throw new AppError(400, 'OTP code has expired. Please request a new OTP.');
+  }
+
+  const existingUser = await User.findOne({ email: normalizedEmail });
+  if (existingUser) {
+    existingUser.isEmailVerified = true;
+    await existingUser.save();
+    pendingOtps.delete(normalizedEmail);
+    return { success: true, message: 'Email address confirmed and verified successfully.', isEmailVerified: true };
+  }
+
+  return { success: true, message: 'Email OTP code validated successfully.', verified: true };
 }
 
 /**

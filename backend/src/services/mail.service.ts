@@ -4,43 +4,51 @@ import type { Transporter } from 'nodemailer';
 let transporter: Transporter | null = null;
 let isEthereal = false;
 
+export function isMailConfigured(): boolean {
+  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+}
+
 async function getTransporter(): Promise<Transporter> {
   if (transporter) return transporter;
 
+  const service = process.env.SMTP_SERVICE;
   const host = process.env.SMTP_HOST;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
-  if (host && user && pass) {
-    transporter = nodemailer.createTransport({
-      host,
-      port: Number(process.env.SMTP_PORT) || 587,
-      secure: process.env.SMTP_SECURE === 'true',
-      auth: { user, pass },
-    });
-    console.log('[MAIL SERVICE] Configured production SMTP transport.');
-  } else {
-    // Generate Ethereal or test transporter for verified development testing
-    try {
-      const testAccount = await nodemailer.createTestAccount();
+  if (user && pass) {
+    if (service?.toLowerCase() === 'gmail' || user.toLowerCase().endsWith('@gmail.com') || host?.toLowerCase().includes('gmail')) {
       transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        secure: false,
-        auth: {
-          user: testAccount.user,
-          pass: testAccount.pass,
-        },
+        service: 'gmail',
+        auth: { user, pass },
       });
-      isEthereal = true;
-      console.log(`[MAIL SERVICE] Configured Ethereal Mail sandbox account: ${testAccount.user}`);
-    } catch {
-      // Fallback to stream transporter if offline
+      console.log(`[MAIL SERVICE] Configured Gmail SMTP transport for ${user}.`);
+    } else if (host) {
+      const port = Number(process.env.SMTP_PORT) || 587;
+      const secure = process.env.SMTP_SECURE === 'true' || port === 465;
       transporter = nodemailer.createTransport({
-        jsonTransport: true,
+        host,
+        port,
+        secure,
+        auth: { user, pass },
       });
-      console.log('[MAIL SERVICE] Configured Local JSON Mail transport.');
+      console.log(`[MAIL SERVICE] Configured SMTP transport (${host}:${port}, secure=${secure}).`);
+    } else if (service) {
+      transporter = nodemailer.createTransport({
+        service,
+        auth: { user, pass },
+      });
+      console.log(`[MAIL SERVICE] Configured SMTP service (${service}) for ${user}.`);
     }
+  }
+
+  if (!transporter) {
+    // Fast local transport for dev mode: never hangs on external network calls
+    transporter = nodemailer.createTransport({
+      jsonTransport: true,
+    });
+    console.log('[MAIL SERVICE] No production SMTP configured in .env. Using Local transport.');
+    console.log('[MAIL SERVICE] To deliver real OTP emails to inboxes, set SMTP_USER and SMTP_PASS in backend/.env');
   }
 
   return transporter;
@@ -53,11 +61,12 @@ export interface MailOptions {
   html: string;
 }
 
-export async function sendMail(opts: MailOptions): Promise<{ success: boolean; previewUrl?: string | false; messageId?: string }> {
+export async function sendMail(opts: MailOptions): Promise<{ success: boolean; previewUrl?: string | false; messageId?: string; error?: string }> {
   try {
     const tx = await getTransporter();
+    const from = process.env.MAIL_FROM || (process.env.SMTP_USER ? `"ChildSafe Portal" <${process.env.SMTP_USER}>` : '"ChildSafe Portal" <no-reply@childsafe.gov.in>');
     const info = await tx.sendMail({
-      from: process.env.MAIL_FROM || '"ChildSafe Portal" <no-reply@childsafe.gov.in>',
+      from,
       to: opts.to,
       subject: opts.subject,
       text: opts.text,
@@ -73,7 +82,7 @@ export async function sendMail(opts: MailOptions): Promise<{ success: boolean; p
     return { success: true, previewUrl, messageId: info.messageId };
   } catch (err: any) {
     console.error(`[MAIL ERROR] Failed to send email to ${opts.to}:`, err.message);
-    return { success: false };
+    return { success: false, error: err.message };
   }
 }
 
