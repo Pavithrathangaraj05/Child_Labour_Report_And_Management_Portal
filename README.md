@@ -1,4 +1,4 @@
-# CHILD-SAFE: Module 1 (Foundation, Public Reporting, Auth)
+# CHILD-SAFE
 
 Integrated Child Labour Reporting, Protection & Rehabilitation Platform. Prototype. All demo data is fictional.
 
